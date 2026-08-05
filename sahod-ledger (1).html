@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>Sahod Ledger — Payday Cash Flow Tracker</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          ink: '#1C2B33',
+          inkdeep: '#152128',
+          paper: '#F7F3EA',
+          paperdim: '#EFE9DA',
+          peso: '#2F6F4E',
+          pesolight: '#E4EEE7',
+          rust: '#B5533C',
+          rustlight: '#F5E6E1',
+          gold: '#C9A227',
+          goldlight: '#F6EFD8',
+          graphite: '#5B6670',
+        },
+        fontFamily: {
+          display: ['Fraunces', 'serif'],
+          body: ['Inter', 'sans-serif'],
+          mono: ['JetBrains Mono', 'monospace'],
+        },
+      },
+    },
+  };
+</script>
+<style>
+  body { background-color: #EFE9DA; }
+  .punch-line {
+    position: relative;
+    border-top: 2px dashed #C9BFA8;
+  }
+  .punch-line::before, .punch-line::after {
+    content: '';
+    position: absolute;
+    top: -8px;
+    width: 16px;
+    height: 16px;
+    border-radius: 9999px;
+    background: #EFE9DA;
+    border: 2px dashed #C9BFA8;
+  }
+  .punch-line::before { left: -8px; }
+  .punch-line::after { right: -8px; }
+  .stamp {
+    transform: rotate(-4deg);
+    border: 3px double currentColor;
+    letter-spacing: 0.12em;
+  }
+  .tab-btn.active {
+    background-color: #1C2B33;
+    color: #F7F3EA;
+  }
+  input[type="text"], input[type="number"], input[type="date"], input[type="month"], select, textarea {
+    background-color: #FBF9F3;
+  }
+  ::-webkit-scrollbar { height: 6px; width: 6px; }
+  ::-webkit-scrollbar-thumb { background: #C9BFA8; border-radius: 9999px; }
+  .scale-hover { transition: transform .15s ease, box-shadow .15s ease; }
+  .scale-hover:active { transform: scale(0.98); }
+</style>
+</head>
+<body class="font-body text-ink min-h-screen pb-24">
+
+<!-- HEADER -->
+<header class="bg-ink text-paper sticky top-0 z-30 shadow-lg">
+  <div class="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between gap-3">
+    <div>
+      <h1 class="font-display font-700 text-2xl tracking-tight">Sahod Ledger</h1>
+      <p class="text-xs text-paper/60 -mt-0.5">what's left after loans, subs &amp; bills</p>
+    </div>
+    <div class="flex items-center gap-1 bg-inkdeep rounded-full px-1 py-1">
+      <button id="prevMonthBtn" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 scale-hover" aria-label="Previous month">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <span id="monthLabel" class="font-mono text-sm px-2 min-w-[6.5rem] text-center"></span>
+      <button id="nextMonthBtn" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 scale-hover" aria-label="Next month">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-5xl mx-auto px-4">
+
+  <!-- MONTH SUMMARY STRIP -->
+  <section class="mt-5 grid grid-cols-3 gap-3">
+    <div class="bg-paper rounded-xl px-3 py-3 border border-black/5 shadow-sm">
+      <p class="text-[10px] uppercase tracking-wider text-graphite">Income</p>
+      <p id="sumIncome" class="font-mono font-semibold text-ink text-sm sm:text-base mt-0.5">₱0.00</p>
+    </div>
+    <div class="bg-paper rounded-xl px-3 py-3 border border-black/5 shadow-sm">
+      <p class="text-[10px] uppercase tracking-wider text-graphite">Deductions</p>
+      <p id="sumDeductions" class="font-mono font-semibold text-rust text-sm sm:text-base mt-0.5">₱0.00</p>
+    </div>
+    <div class="bg-paper rounded-xl px-3 py-3 border border-black/5 shadow-sm">
+      <p class="text-[10px] uppercase tracking-wider text-graphite">Net for month</p>
+      <p id="sumNet" class="font-mono font-semibold text-peso text-sm sm:text-base mt-0.5">₱0.00</p>
+    </div>
+  </section>
+
+  <!-- PAYDAY PASSBOOK CARDS -->
+  <section class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4" id="paydayCards"></section>
+
+  <!-- TABS -->
+  <section class="mt-8">
+    <div class="flex gap-1 bg-paperdim rounded-full p-1 max-w-fit mx-auto">
+      <button data-tab="obligations" class="tab-btn active px-4 py-2 rounded-full text-sm font-medium scale-hover">Obligations</button>
+      <button data-tab="ledger" class="tab-btn px-4 py-2 rounded-full text-sm font-medium scale-hover">Income &amp; Expenses</button>
+      <button data-tab="backup" class="tab-btn px-4 py-2 rounded-full text-sm font-medium scale-hover">Backup</button>
+    </div>
+
+    <!-- OBLIGATIONS TAB -->
+    <div id="tab-obligations" class="tab-panel mt-5">
+      <div class="bg-paper rounded-2xl border border-black/5 shadow-sm p-4 sm:p-5">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="font-display font-600 text-lg">Recurring obligations</h2>
+          <button id="addRecurringBtn" class="bg-ink text-paper text-sm px-3 py-1.5 rounded-full scale-hover">+ Add</button>
+        </div>
+        <p class="text-xs text-graphite mb-4">Loans, subscriptions, and anything else that repeats every month. Choose whether it comes fully out of one payday, or splits evenly across both.</p>
+        <div id="recurringList" class="space-y-2"></div>
+        <p id="recurringEmpty" class="hidden text-sm text-graphite italic py-6 text-center">No obligations yet. Try: <span class="font-mono not-italic">Personal Loan · ₱5,000/month · split across both paydays</span></p>
+      </div>
+    </div>
+
+    <!-- LEDGER TAB -->
+    <div id="tab-ledger" class="tab-panel mt-5 hidden">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div class="bg-paper rounded-2xl border border-black/5 shadow-sm p-4 sm:p-5">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="font-display font-600 text-lg">Income received</h2>
+            <button id="addIncomeBtn" class="bg-peso text-paper text-sm px-3 py-1.5 rounded-full scale-hover">+ Log</button>
+          </div>
+          <p class="text-xs text-graphite mb-3">Log what actually landed on the 15th or 30th. Leave a payday unlogged to fall back on your default salary in Settings.</p>
+          <div id="incomeList" class="space-y-2"></div>
+          <p id="incomeEmpty" class="hidden text-sm text-graphite italic py-6 text-center">Nothing logged for this month yet.</p>
+        </div>
+        <div class="bg-paper rounded-2xl border border-black/5 shadow-sm p-4 sm:p-5">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="font-display font-600 text-lg">One-off expenses</h2>
+            <button id="addExpenseBtn" class="bg-rust text-paper text-sm px-3 py-1.5 rounded-full scale-hover">+ Log</button>
+          </div>
+          <p class="text-xs text-graphite mb-3">Anything extra that isn't already a recurring obligation — groceries, repairs, gifts. Sorted into whichever payday period it falls in.</p>
+          <div id="expenseList" class="space-y-2"></div>
+          <p id="expenseEmpty" class="hidden text-sm text-graphite italic py-6 text-center">Nothing logged for this month yet.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- BACKUP TAB -->
+    <div id="tab-backup" class="tab-panel mt-5 hidden">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="bg-paper rounded-2xl border border-black/5 shadow-sm p-4 sm:p-5">
+          <h2 class="font-display font-600 text-lg mb-3">Paydays &amp; default salary</h2>
+          <div class="space-y-3">
+            <div class="grid grid-cols-2 gap-3">
+              <label class="block">
+                <span class="text-xs text-graphite">First payday (day)</span>
+                <input id="setPayday1" type="number" min="1" max="28" class="w-full mt-1 rounded-lg border border-black/10 px-3 py-2 text-sm">
+              </label>
+              <label class="block">
+                <span class="text-xs text-graphite">Second payday (day)</span>
+                <input id="setPayday2" type="number" min="1" max="31" class="w-full mt-1 rounded-lg border border-black/10 px-3 py-2 text-sm">
+              </label>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <label class="block">
+                <span class="text-xs text-graphite">Default salary (1st payday)</span>
+                <input id="setSalary1" type="number" min="0" step="0.01" class="w-full mt-1 rounded-lg border border-black/10 px-3 py-2 text-sm font-mono">
+              </label>
+              <label class="block">
+                <span class="text-xs text-graphite">Default salary (2nd payday)</span>
+                <input id="setSalary2" type="number" min="0" step="0.01" class="w-full mt-1 rounded-lg border border-black/10 px-3 py-2 text-sm font-mono">
+              </label>
+            </div>
+            <button id="saveSettingsBtn" class="w-full bg-ink text-paper text-sm px-3 py-2 rounded-full scale-hover">Save settings</button>
+          </div>
+        </div>
+        <div class="bg-paper rounded-2xl border border-black/5 shadow-sm p-4 sm:p-5">
+          <h2 class="font-display font-600 text-lg mb-3">Backup &amp; restore</h2>
+          <p class="text-xs text-graphite mb-3">Everything lives only in this browser's local storage. Export a CSV regularly so you never lose it, especially before clearing browser data.</p>
+          <div class="flex flex-col gap-2">
+            <button id="exportCsvBtn" class="w-full bg-peso text-paper text-sm px-3 py-2 rounded-full scale-hover">⬇ Export CSV backup</button>
+            <label class="w-full text-center bg-paperdim text-ink text-sm px-3 py-2 rounded-full scale-hover cursor-pointer">
+              ⬆ Import CSV backup
+              <input id="importCsvInput" type="file" accept=".csv,text/csv" class="hidden">
+            </label>
+            <button id="clearDataBtn" class="w-full text-rust text-xs px-3 py-2 rounded-full border border-rust/30 mt-2 scale-hover">Erase all local data</button>
+          </div>
+          <p id="backupStatus" class="text-xs text-graphite mt-3"></p>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- MODAL -->
+<div id="modalOverlay" class="hidden fixed inset-0 bg-ink/50 z-40 flex items-end sm:items-center justify-center p-0 sm:p-4">
+  <div id="modalBox" class="bg-paper w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl p-5 shadow-2xl max-h-[90vh] overflow-y-auto">
+    <div class="flex items-center justify-between mb-4">
+      <h3 id="modalTitle" class="font-display font-600 text-lg"></h3>
+      <button id="modalClose" class="w-7 h-7 rounded-full hover:bg-black/5 flex items-center justify-center">✕</button>
+    </div>
+    <div id="modalBody"></div>
+  </div>
+</div>
+
+<script>
+/* ---------------------------------------------------------
+   DATA LAYER
+--------------------------------------------------------- */
+const STORAGE_KEY = 'sahodLedgerData_v1';
+
+function defaultData() {
+  return {
+    settings: { payday1: 15, payday2: 30, salary1: 0, salary2: 0 },
+    recurring: [],   // {id, name, category, amount, allocation, active, startDate, endDate}
+    incomes: [],     // {id, month:'YYYY-MM', period:1|2, amount, description}
+    expenses: [],    // {id, date:'YYYY-MM-DD', amount, description, category}
+  };
+}
+
+let data = loadData();
+let currentMonth = new Date().toISOString().slice(0,7); // 'YYYY-MM'
+
+function loadData() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return defaultData();
+    const parsed = JSON.parse(raw);
+    return Object.assign(defaultData(), parsed);
+  } catch (e) {
+    console.error('Failed to load data', e);
+    return defaultData();
+  }
+}
+
+function saveData() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
+function uid() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+
+/* ---------------------------------------------------------
+   MONEY / DATE HELPERS
+--------------------------------------------------------- */
+function fmtMoney(n) {
+  const v = Number(n) || 0;
+  return '₱' + v.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function monthLabel(monthStr) {
+  const [y, m] = monthStr.split('-').map(Number);
+  const d = new Date(y, m - 1, 1);
+  return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+}
+
+function shiftMonth(monthStr, delta) {
+  let [y, m] = monthStr.split('-').map(Number);
+  m += delta;
+  if (m < 1) { m = 12; y -= 1; }
+  if (m > 12) { m = 1; y += 1; }
+  return y + '-' + String(m).padStart(2, '0');
+}
+
+function daysInMonth(monthStr) {
+  const [y, m] = monthStr.split('-').map(Number);
+  return new Date(y, m, 0).getDate();
+}
+
+/* ---------------------------------------------------------
+   CORE CALCULATIONS
+--------------------------------------------------------- */
+// Returns deduction line items (name, amount) applying to a given period (1 or 2) for the month
+function deductionsForPeriod(period, monthStr) {
+  const isoDate = periodDateISO(monthStr, period);
+  return data.recurring
+    .filter(r => r.active !== false)
+    .filter(r => obligationCoversDate(r, isoDate))
+    .map(r => {
+      let amt = 0;
+      if (r.allocation === 'split') amt = r.amount / 2;
+      else if (r.allocation === 'payday1' && period === 1) amt = r.amount;
+      else if (r.allocation === 'payday2' && period === 2) amt = r.amount;
+      return { id: r.id, name: r.name, category: r.category, amount: amt };
+    })
+    .filter(l => l.amount > 0);
+}
+
+function expensesForPeriod(monthStr, period) {
+  const cutoff = data.settings.payday1 || 15;
+  return data.expenses.filter(e => {
+    if (!e.date || !e.date.startsWith(monthStr)) return false;
+    const day = Number(e.date.split('-')[2]);
+    return period === 1 ? day <= cutoff : day > cutoff;
+  });
+}
+
+function incomeForPeriod(monthStr, period) {
+  const entry = data.incomes.find(i => i.month === monthStr && i.period === period);
+  if (entry) return { amount: entry.amount, logged: true, description: entry.description };
+  const fallback = period === 1 ? data.settings.salary1 : data.settings.salary2;
+  return { amount: fallback || 0, logged: false, description: 'Default salary' };
+}
+
+function periodDateLabel(monthStr, period) {
+  const d = periodDate(monthStr, period);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function periodDate(monthStr, period) {
+  const day = period === 1 ? data.settings.payday1 : data.settings.payday2;
+  const [y, m] = monthStr.split('-').map(Number);
+  const clampedDay = Math.min(day, daysInMonth(monthStr));
+  return new Date(y, m - 1, clampedDay);
+}
+
+function periodDateISO(monthStr, period) {
+  const d = periodDate(monthStr, period);
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+// Is a recurring obligation active on the given payday date, given its optional start/end dates?
+function obligationCoversDate(r, isoDate) {
+  if (r.startDate && isoDate < r.startDate) return false;
+  if (r.endDate && isoDate > r.endDate) return false;
+  return true;
+}
+
+/* ---------------------------------------------------------
+   RENDER: MONTH NAV + SUMMARY
+--------------------------------------------------------- */
+function renderMonthNav() {
+  document.getElementById('monthLabel').textContent = monthLabel(currentMonth);
+}
+
+function renderSummary() {
+  let totalIncome = 0, totalDeduction = 0, totalExpense = 0;
+  [1, 2].forEach(period => {
+    totalIncome += incomeForPeriod(currentMonth, period).amount;
+    totalDeduction += deductionsForPeriod(period, currentMonth).reduce((s, l) => s + l.amount, 0);
+    totalExpense += expensesForPeriod(currentMonth, period).reduce((s, e) => s + Number(e.amount), 0);
+  });
+  const net = totalIncome - totalDeduction - totalExpense;
+  document.getElementById('sumIncome').textContent = fmtMoney(totalIncome);
+  document.getElementById('sumDeductions').textContent = fmtMoney(totalDeduction + totalExpense);
+  const netEl = document.getElementById('sumNet');
+  netEl.textContent = fmtMoney(net);
+  netEl.className = 'font-mono font-semibold text-sm sm:text-base mt-0.5 ' + (net < 0 ? 'text-rust' : 'text-peso');
+}
+
+/* ---------------------------------------------------------
+   RENDER: PAYDAY PASSBOOK CARDS
+--------------------------------------------------------- */
+function categoryStyle(cat) {
+  if (cat === 'loan') return { badge: 'bg-rustlight text-rust', label: 'Loan' };
+  if (cat === 'subscription') return { badge: 'bg-goldlight text-[#8a6d10]', label: 'Subscription' };
+  return { badge: 'bg-paperdim text-graphite', label: 'Other' };
+}
+
+function renderPaydayCards() {
+  const container = document.getElementById('paydayCards');
+  container.innerHTML = '';
+  [1, 2].forEach(period => {
+    const income = incomeForPeriod(currentMonth, period);
+    const deductions = deductionsForPeriod(period, currentMonth);
+    const expenses = expensesForPeriod(currentMonth, period);
+    const expenseTotal = expenses.reduce((s, e) => s + Number(e.amount), 0);
+    const deductionTotal = deductions.reduce((s, l) => s + l.amount, 0);
+    const net = income.amount - deductionTotal - expenseTotal;
+
+    const rows = deductions.map(l => {
+      const style = categoryStyle(l.category);
+      return `<div class="flex items-center justify-between text-sm py-1">
+        <span class="flex items-center gap-2 text-ink/80">
+          <span class="text-[10px] px-1.5 py-0.5 rounded-full font-medium ${style.badge}">${style.label}</span>
+          ${escapeHtml(l.name)}
+        </span>
+        <span class="font-mono text-rust">−${fmtMoney(l.amount)}</span>
+      </div>`;
+    }).join('');
+
+    const expenseRow = expenseTotal > 0 ? `
+      <div class="flex items-center justify-between text-sm py-1">
+        <span class="flex items-center gap-2 text-ink/80">
+          <span class="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-paperdim text-graphite">Expenses</span>
+          ${expenses.length} logged
+        </span>
+        <span class="font-mono text-rust">−${fmtMoney(expenseTotal)}</span>
+      </div>` : '';
+
+    const emptyRow = (deductions.length === 0 && expenseTotal === 0)
+      ? `<p class="text-xs text-graphite italic py-2">No deductions this payday.</p>` : '';
+
+    const card = document.createElement('div');
+    card.className = 'bg-paper rounded-2xl border border-black/5 shadow-sm p-5 relative overflow-hidden';
+    card.innerHTML = `
+      <div class="flex items-start justify-between">
+        <div>
+          <p class="text-[10px] uppercase tracking-widest text-graphite">Payday ${period}</p>
+          <p class="font-display font-700 text-xl">${periodDateLabel(currentMonth, period)}</p>
+        </div>
+        <div class="stamp text-xs font-mono font-semibold px-2 py-1 rounded ${net < 0 ? 'text-rust' : 'text-peso'}">NET</div>
+      </div>
+
+      <div class="flex items-center justify-between mt-4 text-sm">
+        <span class="text-ink/80">${income.logged ? escapeHtml(income.description || 'Logged income') : 'Default salary'}</span>
+        <span class="font-mono text-peso">+${fmtMoney(income.amount)}</span>
+      </div>
+
+      <div class="mt-2">${rows}${expenseRow}${emptyRow}</div>
+
+      <div class="punch-line mt-4 pt-4 flex items-center justify-between">
+        <span class="text-xs uppercase tracking-wider text-graphite">Take-home</span>
+        <span class="font-mono font-bold text-lg ${net < 0 ? 'text-rust' : 'text-peso'}">${fmtMoney(net)}</span>
+      </div>
+    `;
+    container.appendChild(card);
+  });
+}
+
+/* ---------------------------------------------------------
+   RENDER: RECURRING OBLIGATIONS LIST
+--------------------------------------------------------- */
+function fmtDateShort(iso) {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function dateRangeLabel(r) {
+  if (!r.startDate && !r.endDate) return 'No end date · runs indefinitely';
+  if (r.startDate && r.endDate) return `${fmtDateShort(r.startDate)} → ${fmtDateShort(r.endDate)}`;
+  if (r.startDate) return `Starts ${fmtDateShort(r.startDate)} · no end date`;
+  return `Ends ${fmtDateShort(r.endDate)}`;
+}
+
+function allocationLabel(a) {
+  if (a === 'split') return 'Split across both paydays';
+  if (a === 'payday1') return 'Full amount on payday 1';
+  return 'Full amount on payday 2';
+}
+
+function renderRecurringList() {
+  const list = document.getElementById('recurringList');
+  const empty = document.getElementById('recurringEmpty');
+  list.innerHTML = '';
+  if (data.recurring.length === 0) {
+    empty.classList.remove('hidden');
+    return;
+  }
+  empty.classList.add('hidden');
+  data.recurring.forEach(r => {
+    const style = categoryStyle(r.category);
+    const row = document.createElement('div');
+    row.className = 'flex items-center justify-between gap-3 border border-black/5 rounded-xl px-3 py-2.5' + (r.active === false ? ' opacity-50' : '');
+    row.innerHTML = `
+      <div class="min-w-0">
+        <div class="flex items-center gap-2">
+          <span class="text-[10px] px-1.5 py-0.5 rounded-full font-medium ${style.badge}">${style.label}</span>
+          <p class="font-medium text-sm truncate">${escapeHtml(r.name)}</p>
+        </div>
+        <p class="text-xs text-graphite mt-0.5">${fmtMoney(r.amount)}/mo · ${allocationLabel(r.allocation)}${r.active === false ? ' · paused' : ''}</p>
+        <p class="text-xs text-graphite mt-0.5">${dateRangeLabel(r)}</p>
+      </div>
+      <div class="flex items-center gap-1 shrink-0">
+        <button data-action="toggle" data-id="${r.id}" class="text-xs px-2 py-1 rounded-full border border-black/10 scale-hover">${r.active === false ? 'Resume' : 'Pause'}</button>
+        <button data-action="edit" data-id="${r.id}" class="w-7 h-7 flex items-center justify-center rounded-full hover:bg-black/5 scale-hover" aria-label="Edit">✎</button>
+        <button data-action="delete" data-id="${r.id}" class="w-7 h-7 flex items-center justify-center rounded-full hover:bg-rustlight text-rust scale-hover" aria-label="Delete">🗑</button>
+      </div>
+    `;
+    list.appendChild(row);
+  });
+}
+
+/* ---------------------------------------------------------
+   RENDER: INCOME + EXPENSE LEDGER LISTS
+--------------------------------------------------------- */
+function renderIncomeList() {
+  const list = document.getElementById('incomeList');
+  const empty = document.getElementById('incomeEmpty');
+  list.innerHTML = '';
+  const items = data.incomes.filter(i => i.month === currentMonth).sort((a,b) => a.period - b.period);
+  if (items.length === 0) { empty.classList.remove('hidden'); return; }
+  empty.classList.add('hidden');
+  items.forEach(i => {
+    const row = document.createElement('div');
+    row.className = 'flex items-center justify-between border border-black/5 rounded-xl px-3 py-2.5';
+    row.innerHTML = `
+      <div class="min-w-0">
+        <p class="font-medium text-sm truncate">${escapeHtml(i.description || ('Payday ' + i.period))}</p>
+        <p class="text-xs text-graphite">Payday ${i.period} · ${periodDateLabel(currentMonth, i.period)}</p>
+      </div>
+      <div class="flex items-center gap-1 shrink-0">
+        <span class="font-mono text-sm text-peso">${fmtMoney(i.amount)}</span>
+        <button data-action="delete-income" data-id="${i.id}" class="w-7 h-7 flex items-center justify-center rounded-full hover:bg-rustlight text-rust scale-hover" aria-label="Delete">🗑</button>
+      </div>
+    `;
+    list.appendChild(row);
+  });
+}
+
+function renderExpenseList() {
+  const list = document.getElementById('expenseList');
+  const empty = document.getElementById('expenseEmpty');
+  list.innerHTML = '';
+  const items = data.expenses.filter(e => e.date && e.date.startsWith(currentMonth)).sort((a,b) => a.date.localeCompare(b.date));
+  if (items.length === 0) { empty.classList.remove('hidden'); return; }
+  empty.classList.add('hidden');
+  items.forEach(e => {
+    const row = document.createElement('div');
+    row.className = 'flex items-center justify-between border border-black/5 rounded-xl px-3 py-2.5';
+    row.innerHTML = `
+      <div class="min-w-0">
+        <p class="font-medium text-sm truncate">${escapeHtml(e.description || 'Expense')}</p>
+        <p class="text-xs text-graphite">${e.date}${e.category ? ' · ' + escapeHtml(e.category) : ''}</p>
+      </div>
+      <div class="flex items-center gap-1 shrink-0">
+        <span class="font-mono text-sm text-rust">${fmtMoney(e.amount)}</span>
+        <button data-action="delete-expense" data-id="${e.id}" class="w-7 h-7 flex items-center justify-center rounded-full hover:bg-rustlight text-rust scale-hover" aria-label="Delete">🗑</button>
+      </div>
+    `;
+    list.appendChild(row);
+  });
+}
+
+function escapeHtml(str) {
+  return String(str ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+/* ---------------------------------------------------------
+   FULL RENDER
+--------------------------------------------------------- */
+function renderAll() {
+  renderMonthNav();
+  renderSummary();
+  renderPaydayCards();
+  renderRecurringList();
+  renderIncomeList();
+  renderExpenseList();
+  document.getElementById('setPayday1').value = data.settings.payday1;
+  document.getElementById('setPayday2').value = data.settings.payday2;
+  document.getElementById('setSalary1').value = data.settings.salary1;
+  document.getElementById('setSalary2').value = data.settings.salary2;
+}
+
+/* ---------------------------------------------------------
+   MODAL SYSTEM
+--------------------------------------------------------- */
+const modalOverlay = document.getElementById('modalOverlay');
+const modalTitle = document.getElementById('modalTitle');
+const modalBody = document.getElementById('modalBody');
+
+function openModal(title, bodyHtml, onMount) {
+  modalTitle.textContent = title;
+  modalBody.innerHTML = bodyHtml;
+  modalOverlay.classList.remove('hidden');
+  if (onMount) onMount(modalBody);
+}
+function closeModal() {
+  modalOverlay.classList.add('hidden');
+  modalBody.innerHTML = '';
+}
+document.getElementById('modalClose').addEventListener('click', closeModal);
+modalOverlay.addEventListener('click', e => { if (e.target === modalOverlay) closeModal(); });
+
+/* ---- Add/Edit Recurring Obligation ---- */
+function openRecurringForm(existing) {
+  const isEdit = !!existing;
+  const html = `
+    <div class="space-y-3">
+      <label class="block">
+        <span class="text-xs text-graphite">Name</span>
+        <input id="fName" type="text" placeholder="e.g. Personal Loan" value="${existing ? escapeHtml(existing.name) : ''}" class="w-full mt-1 rounded-lg border border-black/10 px-3 py-2 text-sm">
+      </label>
+      <label class="block">
+        <span class="text-xs text-graphite">Category</span>
+        <select id="fCategory" class="w-full mt-1 rounded-lg border border-black/10 px-3 py-2 text-sm">
+          <option value="loan" ${existing?.category === 'loan' ? 'selected' : ''}>Loan</option>
+          <option value="subscription" ${existing?.category === 'subscription' ? 'selected' : ''}>Subscription</option>
+          <option value="other" ${(!existing || existing?.category === 'other') ? 'selected' : ''}>Other</option>
+        </select>
+      </label>
+      <label class="block">
+        <span class="text-xs text-graphite">Monthly amount (total)</span>
+        <input id="fAmount" type="number" min="0" step="0.01" placeholder="5000" value="${existing ? existing.amount : ''}" class="w-full mt-1 rounded-lg border border-black/10 px-3 py-2 text-sm font-mono">
+      </label>
+      <label class="block">
+        <span class="text-xs text-graphite">How should it be deducted?</span>
+        <select id="fAllocation" class="w-full mt-1 rounded-lg border border-black/10 px-3 py-2 text-sm">
+          <option value="split" ${(!existing || existing?.allocation === 'split') ? 'selected' : ''}>Split evenly — half from each payday</option>
+          <option value="payday1" ${existing?.allocation === 'payday1' ? 'selected' : ''}>Full amount from payday 1</option>
+          <option value="payday2" ${existing?.allocation === 'payday2' ? 'selected' : ''}>Full amount from payday 2</option>
+        </select>
+      </label>
+      <div class="grid grid-cols-2 gap-3">
+        <label class="block">
+          <span class="text-xs text-graphite">Start date (optional)</span>
+          <input id="fStartDate" type="date" value="${existing?.startDate || ''}" class="w-full mt-1 rounded-lg border border-black/10 px-3 py-2 text-sm">
+        </label>
+        <label class="block">
+          <span class="text-xs text-graphite">End date (optional)</span>
+          <input id="fEndDate" type="date" value="${existing?.endDate || ''}" class="w-full mt-1 rounded-lg border border-black/10 px-3 py-2 text-sm">
+        </label>
+      </div>
+      <p class="text-xs text-graphite -mt-1">Leave either blank if it doesn't apply — e.g. a loan you're still paying off with no fixed end.</p>
+      <button id="fSubmit" class="w-full bg-ink text-paper text-sm px-3 py-2 rounded-full mt-2 scale-hover">${isEdit ? 'Save changes' : 'Add obligation'}</button>
+    </div>
+  `;
+  openModal(isEdit ? 'Edit obligation' : 'Add obligation', html, body => {
+    body.querySelector('#fSubmit').addEventListener('click', () => {
+      const name = body.querySelector('#fName').value.trim();
+      const amount = parseFloat(body.querySelector('#fAmount').value);
+      if (!name || isNaN(amount) || amount < 0) { alert('Please enter a name and a valid amount.'); return; }
+      const category = body.querySelector('#fCategory').value;
+      const allocation = body.querySelector('#fAllocation').value;
+      const startDate = body.querySelector('#fStartDate').value || null;
+      const endDate = body.querySelector('#fEndDate').value || null;
+      if (startDate && endDate && endDate < startDate) { alert('End date can\'t be before the start date.'); return; }
+      if (isEdit) {
+        Object.assign(existing, { name, category, amount, allocation, startDate, endDate });
+      } else {
+        data.recurring.push({ id: uid(), name, category, amount, allocation, active: true, startDate, endDate });
+      }
+      saveData();
+      renderAll();
+      closeModal();
+    });
+  });
+}
+
+/* ---- Add Income ---- */
+function openIncomeForm() {
+  const html = `
+    <div class="space-y-3">
+      <label class="block">
+        <span class="text-xs text-graphite">Which payday?</span>
+        <select id="fPeriod" class="w-full mt-1 rounded-lg border border-black/10 px-3 py-2 text-sm">
+          <option value="1">Payday 1 (${periodDateLabel(currentMonth,1)})</option>
+          <option value="2">Payday 2 (${periodDateLabel(currentMonth,2)})</option>
+        </select>
+      </label>
+      <label class="block">
+        <span class="text-xs text-graphite">Amount received</span>
+        <input id="fAmount" type="number" min="0" step="0.01" placeholder="15000" class="w-full mt-1 rounded-lg border border-black/10 px-3 py-2 text-sm font-mono">
+      </label>
+      <label class="block">
+        <span class="text-xs text-graphite">Description (optional)</span>
+        <input id="fDesc" type="text" placeholder="e.g. Salary" class="w-full mt-1 rounded-lg border border-black/10 px-3 py-2 text-sm">
+      </label>
+      <button id="fSubmit" class="w-full bg-peso text-paper text-sm px-3 py-2 rounded-full mt-2 scale-hover">Log income</button>
+    </div>
+  `;
+  openModal('Log income for ' + monthLabel(currentMonth), html, body => {
+    body.querySelector('#fSubmit').addEventListener('click', () => {
+      const period = parseInt(body.querySelector('#fPeriod').value, 10);
+      const amount = parseFloat(body.querySelector('#fAmount').value);
+      if (isNaN(amount) || amount < 0) { alert('Please enter a valid amount.'); return; }
+      const description = body.querySelector('#fDesc').value.trim();
+      data.incomes = data.incomes.filter(i => !(i.month === currentMonth && i.period === period));
+      data.incomes.push({ id: uid(), month: currentMonth, period, amount, description });
+      saveData();
+      renderAll();
+      closeModal();
+    });
+  });
+}
+
+/* ---- Add Expense ---- */
+function openExpenseForm() {
+  const today = new Date();
+  const defaultDate = currentMonth + '-' + String(Math.min(today.getDate(), daysInMonth(currentMonth))).padStart(2,'0');
+  const html = `
+    <div class="space-y-3">
+      <label class="block">
+        <span class="text-xs text-graphite">Date</span>
+        <input id="fDate" type="date" value="${defaultDate}" class="w-full mt-1 rounded-lg border border-black/10 px-3 py-2 text-sm">
+      </label>
+      <label class="block">
+        <span class="text-xs text-graphite">Amount</span>
+        <input id="fAmount" type="number" min="0" step="0.01" placeholder="500" class="w-full mt-1 rounded-lg border border-black/10 px-3 py-2 text-sm font-mono">
+      </label>
+      <label class="block">
+        <span class="text-xs text-graphite">Description</span>
+        <input id="fDesc" type="text" placeholder="e.g. Groceries" class="w-full mt-1 rounded-lg border border-black/10 px-3 py-2 text-sm">
+      </label>
+      <label class="block">
+        <span class="text-xs text-graphite">Category (optional)</span>
+        <input id="fCategory" type="text" placeholder="e.g. Food" class="w-full mt-1 rounded-lg border border-black/10 px-3 py-2 text-sm">
+      </label>
+      <button id="fSubmit" class="w-full bg-rust text-paper text-sm px-3 py-2 rounded-full mt-2 scale-hover">Log expense</button>
+    </div>
+  `;
+  openModal('Log expense', html, body => {
+    body.querySelector('#fSubmit').addEventListener('click', () => {
+      const date = body.querySelector('#fDate').value;
+      const amount = parseFloat(body.querySelector('#fAmount').value);
+      if (!date || isNaN(amount) || amount < 0) { alert('Please enter a date and a valid amount.'); return; }
+      const description = body.querySelector('#fDesc').value.trim();
+      const category = body.querySelector('#fCategory').value.trim();
+      data.expenses.push({ id: uid(), date, amount, description, category });
+      saveData();
+      renderAll();
+      closeModal();
+    });
+  });
+}
+
+/* ---------------------------------------------------------
+   EVENT WIRING
+--------------------------------------------------------- */
+document.getElementById('prevMonthBtn').addEventListener('click', () => { currentMonth = shiftMonth(currentMonth, -1); renderAll(); });
+document.getElementById('nextMonthBtn').addEventListener('click', () => { currentMonth = shiftMonth(currentMonth, 1); renderAll(); });
+
+document.getElementById('addRecurringBtn').addEventListener('click', () => openRecurringForm(null));
+document.getElementById('addIncomeBtn').addEventListener('click', openIncomeForm);
+document.getElementById('addExpenseBtn').addEventListener('click', openExpenseForm);
+
+document.getElementById('recurringList').addEventListener('click', e => {
+  const btn = e.target.closest('button[data-action]');
+  if (!btn) return;
+  const id = btn.dataset.id;
+  const item = data.recurring.find(r => r.id === id);
+  if (!item) return;
+  if (btn.dataset.action === 'edit') openRecurringForm(item);
+  else if (btn.dataset.action === 'delete') {
+    if (confirm(`Delete "${item.name}"? This can't be undone.`)) {
+      data.recurring = data.recurring.filter(r => r.id !== id);
+      saveData(); renderAll();
+    }
+  } else if (btn.dataset.action === 'toggle') {
+    item.active = item.active === false ? true : false;
+    saveData(); renderAll();
+  }
+});
+
+document.getElementById('incomeList').addEventListener('click', e => {
+  const btn = e.target.closest('button[data-action="delete-income"]');
+  if (!btn) return;
+  data.incomes = data.incomes.filter(i => i.id !== btn.dataset.id);
+  saveData(); renderAll();
+});
+
+document.getElementById('expenseList').addEventListener('click', e => {
+  const btn = e.target.closest('button[data-action="delete-expense"]');
+  if (!btn) return;
+  data.expenses = data.expenses.filter(x => x.id !== btn.dataset.id);
+  saveData(); renderAll();
+});
+
+/* Tabs */
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
+    document.getElementById('tab-' + btn.dataset.tab).classList.remove('hidden');
+  });
+});
+
+/* Settings */
+document.getElementById('saveSettingsBtn').addEventListener('click', () => {
+  const p1 = parseInt(document.getElementById('setPayday1').value, 10);
+  const p2 = parseInt(document.getElementById('setPayday2').value, 10);
+  const s1 = parseFloat(document.getElementById('setSalary1').value);
+  const s2 = parseFloat(document.getElementById('setSalary2').value);
+  data.settings.payday1 = isNaN(p1) ? 15 : Math.min(Math.max(p1,1),28);
+  data.settings.payday2 = isNaN(p2) ? 30 : Math.min(Math.max(p2,1),31);
+  data.settings.salary1 = isNaN(s1) ? 0 : s1;
+  data.settings.salary2 = isNaN(s2) ? 0 : s2;
+  saveData();
+  renderAll();
+  const status = document.getElementById('backupStatus');
+  status.textContent = 'Settings saved.';
+  status.className = 'text-xs text-peso mt-3';
+});
+
+/* ---------------------------------------------------------
+   CSV EXPORT / IMPORT
+--------------------------------------------------------- */
+function csvEscape(val) {
+  const s = String(val ?? '');
+  if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+  return s;
+}
+
+function exportCsv() {
+  const rows = [['type','id','month_or_date','period','name','category','amount','allocation','active','description','start_date','end_date']];
+  rows.push(['setting', 'payday1', '', '', '', '', data.settings.payday1, '', '', '', '', '']);
+  rows.push(['setting', 'payday2', '', '', '', '', data.settings.payday2, '', '', '', '', '']);
+  rows.push(['setting', 'salary1', '', '', '', '', data.settings.salary1, '', '', '', '', '']);
+  rows.push(['setting', 'salary2', '', '', '', '', data.settings.salary2, '', '', '', '', '']);
+  data.recurring.forEach(r => rows.push(['recurring', r.id, '', '', r.name, r.category, r.amount, r.allocation, r.active !== false, '', r.startDate || '', r.endDate || '']));
+  data.incomes.forEach(i => rows.push(['income', i.id, i.month, i.period, '', '', i.amount, '', '', i.description || '', '', '']));
+  data.expenses.forEach(e => rows.push(['expense', e.id, e.date, '', '', e.category || '', e.amount, '', '', e.description || '', '', '']));
+
+  const csv = rows.map(r => r.map(csvEscape).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `sahod-ledger-backup-${currentMonth}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  const status = document.getElementById('backupStatus');
+  status.textContent = 'Backup exported.';
+  status.className = 'text-xs text-peso mt-3';
+}
+
+function parseCsv(text) {
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i+1] === '"') { field += '"'; i++; }
+        else inQuotes = false;
+      } else field += c;
+    } else {
+      if (c === '"') inQuotes = true;
+      else if (c === ',') { row.push(field); field = ''; }
+      else if (c === '\n' || c === '\r') {
+        if (c === '\r' && text[i+1] === '\n') i++;
+        row.push(field); field = '';
+        if (row.length > 1 || row[0] !== '') rows.push(row);
+        row = [];
+      } else field += c;
+    }
+  }
+  if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row); }
+  return rows;
+}
+
+function importCsv(text) {
+  const rows = parseCsv(text);
+  if (rows.length === 0) return alert('That file looks empty.');
+  const header = rows[0].map(h => h.trim().toLowerCase());
+  const idx = name => header.indexOf(name);
+  const iType = idx('type'), iId = idx('id'), iMonthDate = idx('month_or_date'), iPeriod = idx('period'),
+        iName = idx('name'), iCategory = idx('category'), iAmount = idx('amount'), iAllocation = idx('allocation'),
+        iActive = idx('active'), iDesc = idx('description'), iStartDate = idx('start_date'), iEndDate = idx('end_date');
+
+  if (iType === -1 || iAmount === -1) {
+    return alert('This file doesn\'t look like a Sahod Ledger backup — missing expected columns.');
+  }
+
+  const fresh = defaultData();
+  for (let r = 1; r < rows.length; r++) {
+    const row = rows[r];
+    if (!row || row.every(c => c === '')) continue;
+    const type = row[iType];
+    if (type === 'setting') {
+      const key = row[iId];
+      const val = parseFloat(row[iAmount]) || 0;
+      if (key === 'payday1' || key === 'payday2' || key === 'salary1' || key === 'salary2') {
+        fresh.settings[key] = val;
+      }
+    } else if (type === 'recurring') {
+      fresh.recurring.push({
+        id: row[iId] || uid(),
+        name: row[iName] || 'Untitled',
+        category: row[iCategory] || 'other',
+        amount: parseFloat(row[iAmount]) || 0,
+        allocation: row[iAllocation] || 'split',
+        active: (row[iActive] || 'true') !== 'false',
+        startDate: (iStartDate > -1 && row[iStartDate]) ? row[iStartDate] : null,
+        endDate: (iEndDate > -1 && row[iEndDate]) ? row[iEndDate] : null,
+      });
+    } else if (type === 'income') {
+      fresh.incomes.push({
+        id: row[iId] || uid(),
+        month: row[iMonthDate],
+        period: parseInt(row[iPeriod], 10) || 1,
+        amount: parseFloat(row[iAmount]) || 0,
+        description: row[iDesc] || '',
+      });
+    } else if (type === 'expense') {
+      fresh.expenses.push({
+        id: row[iId] || uid(),
+        date: row[iMonthDate],
+        amount: parseFloat(row[iAmount]) || 0,
+        category: row[iCategory] || '',
+        description: row[iDesc] || '',
+      });
+    }
+  }
+
+  if (!confirm('Import this backup? This will replace all data currently in the app.')) return;
+  data = fresh;
+  saveData();
+  renderAll();
+  const status = document.getElementById('backupStatus');
+  status.textContent = 'Backup imported successfully.';
+  status.className = 'text-xs text-peso mt-3';
+}
+
+document.getElementById('exportCsvBtn').addEventListener('click', exportCsv);
+document.getElementById('importCsvInput').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try { importCsv(reader.result); }
+    catch (err) { console.error(err); alert('Could not read that file. Make sure it\'s a Sahod Ledger CSV export.'); }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
+
+document.getElementById('clearDataBtn').addEventListener('click', () => {
+  if (confirm('Erase all data stored in this browser? This cannot be undone — export a backup first if you want to keep it.')) {
+    data = defaultData();
+    saveData();
+    renderAll();
+    const status = document.getElementById('backupStatus');
+    status.textContent = 'All local data erased.';
+    status.className = 'text-xs text-rust mt-3';
+  }
+});
+
+/* ---------------------------------------------------------
+   INIT
+--------------------------------------------------------- */
+renderAll();
+</script>
+</body>
+</html>
